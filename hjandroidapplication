@@ -1,0 +1,36 @@
+FROM cloudbees/java-build-tools AS jnlp
+  
+USER root
+
+ARG JENKINS_REMOTING_VERSION=3.27
+
+# See https://github.com/jenkinsci/docker-slave/blob/master/Dockerfile#L31
+RUN curl --create-dirs -sSLo /usr/share/jenkins/slave.jar https://repo.jenkins-ci.org/public/org/jenkins-ci/main/remoting/$JENKINS_REMOTING_VERSION/remoting-$JENKINS_REMOTING_VERSION.jar \
+  && chmod 755 /usr/share/jenkins \
+  && chmod 644 /usr/share/jenkins/slave.jar
+
+RUN curl https://raw.githubusercontent.com/cloudbees/jnlp-slave-with-java-build-tools-dockerfile/master/jenkins-slave -o /usr/local/bin/jenkins-slaveA
+
+
+RUN chmod a+rwx /home/jenkins
+WORKDIR /home/jenkins
+USER jenkins
+
+ENTRYPOINT ["/opt/bin/entry_point.sh", "/usr/local/bin/jenkins-slave"]
+
+FROM xmartlabs/android AS android
+
+FROM jenkins/jenkins:lts AS jenkins
+ENV ANDROID_HOME /opt/android-sdk-linux
+
+COPY --from=android ${ANDROID_HOME} ${ANDROID_HOME}
+COPY --from=android /usr/lib/jvm/java-8-oracle /usr/lib/jvm/java-8-oracle
+COPY --from=android /usr/bin/gradle /usr/bin/gradle
+ENV JAVA_HOME /usr/lib/jvm/java-8-oracle
+ENV PATH ${PATH}:${ANDROID_HOME}/tools:${ANDROID_HOME}/platform-tools
+
+USER root
+RUN chown -R jenkins:jenkins ${ANDROID_HOME}
+USER jenkins
+
+ENV ANDROID_EMULATOR_FORCE_32BIT true
